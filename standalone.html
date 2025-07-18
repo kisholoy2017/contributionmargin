@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧮 MER Calculator - Standalone Version</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --dark-color: #1f2937;
+            --light-gray: #f8fafc;
+            --border-color: #e5e7eb;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .main-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin: 2rem auto;
+            max-width: 1200px;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary-color), #3b82f6);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .content-area {
+            padding: 2rem;
+        }
+
+        .input-section {
+            background: var(--light-gray);
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .form-control {
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            border: none;
+            padding: 0.75rem 2rem;
+            font-weight: 600;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+            transform: translateY(-2px);
+        }
+
+        .results-section {
+            background: white;
+            border: 2px solid var(--border-color);
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            display: none;
+        }
+
+        .results-section.show {
+            display: block;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-card {
+            background: var(--light-gray);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .result-card.success {
+            border-left-color: var(--success-color);
+            background: #f0fdf4;
+        }
+
+        .result-card.danger {
+            border-left-color: var(--danger-color);
+            background: #fef2f2;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-value.success { color: var(--success-color); }
+        .metric-value.danger { color: var(--danger-color); }
+
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 2px solid var(--border-color);
+        }
+
+        .alert-info {
+            background: #e0f2fe;
+            border: 1px solid #0288d1;
+            color: #0277bd;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .main-container { margin: 1rem; }
+            .header h1 { font-size: 2rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="main-container">
+            <div class="header">
+                <h1><i class="fas fa-calculator"></i> MER Calculator</h1>
+                <p>Professional Marketing Efficiency Ratio & Contribution Margin Calculator</p>
+                <small>Standalone Version - No Server Required</small>
+            </div>
+
+            <div class="content-area">
+                <div class="alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Standalone Mode:</strong> This version works entirely in your browser without requiring a server connection.
+                </div>
+
+                <div class="input-section">
+                    <h2><i class="fas fa-cog"></i> Configuration & Target Values</h2>
+                    
+                    <form id="calculatorForm">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h5><i class="fas fa-bullseye"></i> Target Values</h5>
+                                
+                                <div class="mb-3">
+                                    <label for="target_revenue" class="form-label">Target Revenue (€)</label>
+                                    <input type="number" class="form-control" id="target_revenue" value="820000" step="1000" min="1">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="target_mer" class="form-label">Target MER</label>
+                                    <input type="number" class="form-control" id="target_mer" value="7.50" step="0.1" min="0.1">
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <h5><i class="fas fa-sliders-h"></i> Configuration</h5>
+                                
+                                <div class="mb-3">
+                                    <label for="variable_cost" class="form-label">Variable Cost (decimal)</label>
+                                    <input type="number" class="form-control" id="variable_cost" value="0.65" step="0.01" min="0" max="0.99">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="contribution_margin_goal" class="form-label">Contribution Margin Goal (€)</label>
+                                    <input type="number" class="form-control" id="contribution_margin_goal" value="176000" step="1000" min="1">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-center mt-4">
+                            <button type="submit" class="btn btn-primary btn-lg me-3">
+                                <i class="fas fa-calculator"></i> Calculate Contribution Margin
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="resetForm()">
+                                <i class="fas fa-undo"></i> Reset
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="errorMessages"></div>
+
+                <div class="results-section" id="resultsSection">
+                    <h2><i class="fas fa-chart-line"></i> Results & Analysis</h2>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="result-card" id="mainResultCard">
+                                <h5><i class="fas fa-target"></i> Main Results</h5>
+                                <div class="metric">
+                                    <span>Target Revenue:</span>
+                                    <span id="displayTargetRevenue">€0</span>
+                                </div>
+                                <div class="metric">
+                                    <span>Target MER:</span>
+                                    <span id="displayTargetMer">0%</span>
+                                </div>
+                                <div class="metric">
+                                    <span>Contribution Margin:</span>
+                                    <span id="displayContributionMargin">€0</span>
+                                </div>
+                                <div class="metric">
+                                    <span>Goal Amount:</span>
+                                    <span id="displayGoalAmount">€0</span>
+                                </div>
+                                <div class="metric">
+                                    <span>Meets Goal:</span>
+                                    <span id="displayMeetsGoal">-</span>
+                                </div>
+                                <div class="metric">
+                                    <span>Difference:</span>
+                                    <span id="displayDifference">€0</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="result-card">
+                                <h5><i class="fas fa-microscope"></i> Additional Analysis</h5>
+                                <div class="metric">
+                                    <span>Minimum Revenue for Goal:</span>
+                                    <span id="displayMinRevenue">€0</span>
+                                </div>
+                                <div class="metric">
+                                    <span>Revenue vs Minimum:</span>
+                                    <span id="displayRevenueDiff">€0</span>
+                                </div>
+                                <div class="metric">
+                                    <span>Gross Profit:</span>
+                                    <span id="displayGrossProfit">€0</span>
+                                </div>
+                                <div class="metric">
+                                    <span>Marketing Spend:</span>
+                                    <span id="displayMarketingSpend">€0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="result-card">
+                                <h5><i class="fas fa-calculator"></i> Formula Breakdown</h5>
+                                <p><strong>Formula:</strong> Contribution Margin = Revenue × (1 - Variable Cost) - (Revenue ÷ MER)</p>
+                                <p id="formulaBreakdown">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-container" id="chartContainer" style="display: none;">
+                    <h2><i class="fas fa-chart-area"></i> Contribution Margin vs Revenue Chart</h2>
+                    <canvas id="merChart" width="800" height="400"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let chart = null;
+
+        // MER Calculator logic (standalone)
+        function calculateContributionMargin(revenue, mer, variableCost) {
+            const grossProfit = revenue * (1 - variableCost);
+            const marketingSpend = revenue / mer;
+            return grossProfit - marketingSpend;
+        }
+
+        function generateRevenueRangeData(targetMer, targetRevenue, variableCost, revenueIncrement = 20000) {
+            const pointsBefore = 10;
+            const pointsAfter = 10;
+            const startRevenue = targetRevenue - (pointsBefore * revenueIncrement);
+            const endRevenue = targetRevenue + (pointsAfter * revenueIncrement);
+            
+            const revenueValues = [];
+            const cmValues = [];
+            
+            for (let currentRevenue = startRevenue; currentRevenue <= endRevenue; currentRevenue += revenueIncrement) {
+                revenueValues.push(currentRevenue);
+                cmValues.push(calculateContributionMargin(currentRevenue, targetMer, variableCost));
+            }
+            
+            return { revenueValues, cmValues };
+        }
+
+        function resetForm() {
+            document.getElementById('target_revenue').value = 820000;
+            document.getElementById('target_mer').value = 7.50;
+            document.getElementById('variable_cost').value = 0.65;
+            document.getElementById('contribution_margin_goal').value = 176000;
+            hideResults();
+        }
+
+        document.getElementById('calculatorForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            try {
+                const formData = {
+                    target_revenue: parseFloat(document.getElementById('target_revenue').value),
+                    target_mer: parseFloat(document.getElementById('target_mer').value),
+                    variable_cost: parseFloat(document.getElementById('variable_cost').value),
+                    contribution_margin_goal: parseFloat(document.getElementById('contribution_margin_goal').value)
+                };
+                
+                // Validation
+                const errors = [];
+                if (!formData.target_revenue || formData.target_revenue <= 0) {
+                    errors.push('Target Revenue must be greater than 0');
+                }
+                if (!formData.target_mer || formData.target_mer <= 0) {
+                    errors.push('Target MER must be greater than 0');
+                }
+                if (!formData.variable_cost || formData.variable_cost < 0 || formData.variable_cost >= 1) {
+                    errors.push('Variable Cost must be between 0 and 1');
+                }
+                if (!formData.contribution_margin_goal || formData.contribution_margin_goal <= 0) {
+                    errors.push('Contribution Margin Goal must be greater than 0');
+                }
+                
+                if (errors.length > 0) {
+                    showErrors(errors);
+                    return;
+                }
+                
+                clearErrors();
+                
+                // Calculate results
+                const contributionMargin = calculateContributionMargin(
+                    formData.target_revenue, 
+                    formData.target_mer, 
+                    formData.variable_cost
+                );
+                
+                const meetsGoal = contributionMargin >= formData.contribution_margin_goal;
+                const difference = contributionMargin - formData.contribution_margin_goal;
+                
+                const coefficient = (1 - formData.variable_cost) - (1 / formData.target_mer);
+                const minRevenue = coefficient > 0 ? formData.contribution_margin_goal / coefficient : 0;
+                const revenueDifference = formData.target_revenue - minRevenue;
+                
+                const grossProfit = formData.target_revenue * (1 - formData.variable_cost);
+                const marketingSpend = formData.target_revenue / formData.target_mer;
+                
+                // Generate chart data
+                const chartData = generateRevenueRangeData(
+                    formData.target_mer, 
+                    formData.target_revenue, 
+                    formData.variable_cost
+                );
+                
+                const result = {
+                    contribution_margin: contributionMargin,
+                    meets_goal: meetsGoal,
+                    difference: difference,
+                    min_revenue: minRevenue,
+                    revenue_difference: revenueDifference,
+                    gross_profit: grossProfit,
+                    marketing_spend: marketingSpend,
+                    chart_data: {
+                        revenue_values: chartData.revenueValues,
+                        cm_values: chartData.cmValues,
+                        cm_goal: formData.contribution_margin_goal
+                    }
+                };
+                
+                displayResults(result, formData);
+                
+            } catch (error) {
+                showError('Error calculating results: ' + error.message);
+            }
+        });
+
+        function displayResults(result, formData) {
+            const mainCard = document.getElementById('mainResultCard');
+            mainCard.className = result.meets_goal ? 'result-card success' : 'result-card danger';
+            
+            document.getElementById('displayTargetRevenue').textContent = formatCurrency(formData.target_revenue);
+            document.getElementById('displayTargetMer').textContent = (formData.target_mer * 100).toFixed(0) + '%';
+            document.getElementById('displayContributionMargin').textContent = formatCurrency(result.contribution_margin);
+            document.getElementById('displayGoalAmount').textContent = formatCurrency(formData.contribution_margin_goal);
+            
+            const meetsGoalEl = document.getElementById('displayMeetsGoal');
+            meetsGoalEl.textContent = result.meets_goal ? 'YES ✅' : 'NO ❌';
+            meetsGoalEl.className = result.meets_goal ? 'metric-value success' : 'metric-value danger';
+            
+            const differenceEl = document.getElementById('displayDifference');
+            differenceEl.textContent = formatCurrency(result.difference) + (result.difference >= 0 ? ' (Surplus)' : ' (Deficit)');
+            differenceEl.className = result.difference >= 0 ? 'metric-value success' : 'metric-value danger';
+            
+            document.getElementById('displayMinRevenue').textContent = formatCurrency(result.min_revenue);
+            
+            const revenueDiffEl = document.getElementById('displayRevenueDiff');
+            revenueDiffEl.textContent = formatCurrency(result.revenue_difference) + (result.revenue_difference >= 0 ? ' (Surplus)' : ' (Deficit)');
+            revenueDiffEl.className = result.revenue_difference >= 0 ? 'metric-value success' : 'metric-value danger';
+            
+            document.getElementById('displayGrossProfit').textContent = formatCurrency(result.gross_profit);
+            document.getElementById('displayMarketingSpend').textContent = formatCurrency(result.marketing_spend);
+            
+            const grossProfitPercent = ((1 - formData.variable_cost) * 100).toFixed(0);
+            document.getElementById('formulaBreakdown').innerHTML = 
+                `€${formatNumber(formData.target_revenue)} × ${grossProfitPercent}% - (€${formatNumber(formData.target_revenue)} ÷ ${formData.target_mer}) = €${formatNumber(result.gross_profit)} - €${formatNumber(result.marketing_spend)} = <strong>€${formatNumber(result.contribution_margin)}</strong>`;
+            
+            createChart(result.chart_data);
+            
+            document.getElementById('resultsSection').classList.add('show');
+            document.getElementById('chartContainer').style.display = 'block';
+        }
+
+        function createChart(chartData) {
+            const ctx = document.getElementById('merChart').getContext('2d');
+            
+            if (chart) {
+                chart.destroy();
+            }
+            
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartData.revenue_values.map(r => formatCurrency(r)),
+                    datasets: [{
+                        label: 'Contribution Margin',
+                        data: chartData.cm_values,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 3,
+                        fill: true
+                    }, {
+                        label: 'CM Goal',
+                        data: Array(chartData.revenue_values.length).fill(chartData.cm_goal),
+                        borderColor: '#f59e0b',
+                        borderDash: [10, 5],
+                        borderWidth: 3,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: 'Contribution Margin vs Revenue'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            ticks: {
+                                callback: function(value) {
+                                    return formatCurrency(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function formatCurrency(value) {
+            return '€' + formatNumber(value);
+        }
+
+        function formatNumber(value) {
+            return new Intl.NumberFormat('en-US').format(Math.round(value));
+        }
+
+        function hideResults() {
+            document.getElementById('resultsSection').classList.remove('show');
+            document.getElementById('chartContainer').style.display = 'none';
+        }
+
+        function showErrors(errors) {
+            const errorDiv = document.getElementById('errorMessages');
+            errorDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <h5><i class="fas fa-exclamation-triangle"></i> Validation Errors:</h5>
+                    <ul class="mb-0">
+                        ${errors.map(error => `<li>${error}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+
+        function clearErrors() {
+            document.getElementById('errorMessages').innerHTML = '';
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessages');
+            errorDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i> ${message}
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
