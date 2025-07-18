@@ -1,268 +1,9 @@
-#!/usr/bin/env python3
-"""
-🧮 MER Contribution Margin Calculator - Simplified Version
-A professional web application for calculating Marketing Efficiency Ratio (MER) 
-and Contribution Margin with basic visualization.
-"""
-
-import math
-import json
-import io
-import base64
-from datetime import datetime
-from typing import Dict, List, Tuple, Optional
-
-# Simple Flask-like web server using only built-in modules
-import http.server
-import socketserver
-import urllib.parse
-import urllib.request
-from http.server import HTTPServer, BaseHTTPRequestHandler
-
-class MERCalculator:
-    """MER (Marketing Efficiency Ratio) Contribution Margin Calculator"""
-    
-    def __init__(self):
-        """Initialize the calculator with default configuration."""
-        self.default_config = {
-            'variable_cost': 0.65,              # 65% variable cost
-            'revenue_increment': 20000,         # €20,000 revenue increment
-            'contribution_margin_goal': 176000  # €176,000 contribution margin goal
-        }
-        
-        self.default_inputs = {
-            'target_revenue': 820000,           # €820,000 - Target revenue
-            'target_mer': 7.50                  # 750% MER (7.50 as decimal)
-        }
-    
-    def calculate_contribution_margin(self, revenue: float, mer: float, variable_cost: float) -> float:
-        """Calculate contribution margin for given revenue and MER."""
-        gross_profit = revenue * (1 - variable_cost)
-        marketing_spend = revenue / mer
-        return gross_profit - marketing_spend
-    
-    def generate_revenue_range_data(self, target_mer: float, target_revenue: float, 
-                                   variable_cost: float, revenue_increment: float,
-                                   points_before: int = 10, points_after: int = 10) -> Tuple[List[float], List[float]]:
-        """Generate data points for revenue range analysis."""
-        start_revenue = target_revenue - (points_before * revenue_increment)
-        end_revenue = target_revenue + (points_after * revenue_increment)
-        
-        revenue_values = []
-        cm_values = []
-        
-        current_revenue = start_revenue
-        while current_revenue <= end_revenue:
-            revenue_values.append(current_revenue)
-            cm_values.append(self.calculate_contribution_margin(current_revenue, target_mer, variable_cost))
-            current_revenue += revenue_increment
-        
-        return revenue_values, cm_values
-    
-    def create_simple_chart_data(self, revenue_values: List[float], cm_values: List[float], 
-                                target_revenue: float, target_cm: float, cm_goal: float) -> Dict:
-        """Create chart data for simple visualization."""
-        return {
-            'revenue_values': revenue_values,
-            'cm_values': cm_values,
-            'target_revenue': target_revenue,
-            'target_cm': target_cm,
-            'cm_goal': cm_goal,
-            'min_revenue': min(revenue_values),
-            'max_revenue': max(revenue_values),
-            'min_cm': min(cm_values),
-            'max_cm': max(cm_values)
-        }
-    
-    def validate_inputs(self, config: Dict, user_inputs: Dict) -> List[str]:
-        """Validate all inputs and return list of errors."""
-        errors = []
-        
-        if not config.get('variable_cost') or config['variable_cost'] < 0 or config['variable_cost'] >= 1:
-            errors.append('Variable Cost must be between 0 and 1 (e.g., 0.65 for 65%)')
-        
-        if not config.get('revenue_increment') or config['revenue_increment'] <= 0:
-            errors.append('Revenue Increment must be greater than 0')
-        
-        if not config.get('contribution_margin_goal') or config['contribution_margin_goal'] <= 0:
-            errors.append('Contribution Margin Goal must be greater than 0')
-        
-        if not user_inputs.get('target_revenue') or user_inputs['target_revenue'] <= 0:
-            errors.append('Target Revenue must be greater than 0')
-        
-        if not user_inputs.get('target_mer') or user_inputs['target_mer'] <= 0:
-            errors.append('Target MER must be greater than 0')
-        
-        return errors
-
-# Initialize calculator
-calculator = MERCalculator()
-
-# Global session storage (simplified)
-sessions = {}
-
-class MERRequestHandler(BaseHTTPRequestHandler):
-    """HTTP request handler for the MER calculator."""
-    
-    def do_GET(self):
-        """Handle GET requests."""
-        if self.path == '/' or self.path == '/index.html':
-            self.serve_index()
-        elif self.path == '/api/defaults':
-            self.serve_defaults()
-        else:
-            self.send_error(404)
-    
-    def do_HEAD(self):
-        """Handle HEAD requests (same as GET but without body)."""
-        if self.path == '/' or self.path == '/index.html':
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html')
-            self.end_headers()
-        elif self.path == '/api/defaults':
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-        else:
-            self.send_error(404)
-    
-    def do_POST(self):
-        """Handle POST requests."""
-        if self.path == '/api/calculate':
-            self.handle_calculate()
-        elif self.path == '/api/reset':
-            self.handle_reset()
-        else:
-            self.send_error(404)
-    
-    def serve_index(self):
-        """Serve the main HTML page."""
-        try:
-            html_content = self.get_html_template()
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html; charset=utf-8')
-            self.send_header('Content-length', len(html_content.encode('utf-8')))
-            self.send_header('Cache-Control', 'no-cache')
-            self.end_headers()
-            self.wfile.write(html_content.encode('utf-8'))
-            print(f"✅ Served main page to {self.client_address[0]}")
-        except Exception as e:
-            print(f"❌ Error serving index: {e}")
-            self.send_error(500)
-    
-    def serve_defaults(self):
-        """Serve default configuration values."""
-        response = {
-            'config': calculator.default_config,
-            'user_inputs': calculator.default_inputs
-        }
-        
-        self.send_json_response(response)
-    
-    def handle_calculate(self):
-        """Handle calculation requests."""
-        try:
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            data = json.loads(post_data.decode('utf-8'))
-            
-            config = {
-                'variable_cost': float(data.get('variable_cost', 0.65)),
-                'revenue_increment': float(data.get('revenue_increment', 20000)),
-                'contribution_margin_goal': float(data.get('contribution_margin_goal', 176000))
-            }
-            
-            user_inputs = {
-                'target_revenue': float(data.get('target_revenue', 820000)),
-                'target_mer': float(data.get('target_mer', 7.50))
-            }
-            
-            errors = calculator.validate_inputs(config, user_inputs)
-            if errors:
-                self.send_json_response({'success': False, 'errors': errors})
-                return
-            
-            contribution_margin = calculator.calculate_contribution_margin(
-                user_inputs['target_revenue'], 
-                user_inputs['target_mer'],
-                config['variable_cost']
-            )
-            
-            meets_goal = contribution_margin >= config['contribution_margin_goal']
-            
-            revenue_values, cm_values = calculator.generate_revenue_range_data(
-                user_inputs['target_mer'], 
-                user_inputs['target_revenue'],
-                config['variable_cost'],
-                config['revenue_increment']
-            )
-            
-            chart_data = calculator.create_simple_chart_data(
-                revenue_values, cm_values, user_inputs['target_revenue'], 
-                contribution_margin, config['contribution_margin_goal']
-            )
-            
-            coefficient = (1 - config['variable_cost']) - (1 / user_inputs['target_mer'])
-            min_revenue = config['contribution_margin_goal'] / coefficient if coefficient > 0 else 0
-            
-            gross_profit = user_inputs['target_revenue'] * (1 - config['variable_cost'])
-            marketing_spend = user_inputs['target_revenue'] / user_inputs['target_mer']
-            
-            result = {
-                'success': True,
-                'contribution_margin': contribution_margin,
-                'meets_goal': meets_goal,
-                'difference': contribution_margin - config['contribution_margin_goal'],
-                'min_revenue': min_revenue,
-                'revenue_difference': user_inputs['target_revenue'] - min_revenue,
-                'gross_profit': gross_profit,
-                'marketing_spend': marketing_spend,
-                'chart_data': chart_data,
-                'chart_explanation': {
-                    'blue_line': 'Shows how your contribution margin changes as revenue increases',
-                    'orange_line': f'Your target contribution margin goal (€{config["contribution_margin_goal"]:,.0f})',
-                    'red_star': f'Your specific revenue/CM combination (€{user_inputs["target_revenue"]:,.0f} → €{contribution_margin:,.0f})'
-                }
-            }
-            
-            self.send_json_response(result)
-            
-        except Exception as e:
-            self.send_json_response({'success': False, 'errors': [f'Calculation error: {str(e)}']})
-    
-    def handle_reset(self):
-        """Handle reset requests."""
-        response = {'success': True, 'message': 'Configuration reset to defaults'}
-        self.send_json_response(response)
-    
-    def send_json_response(self, data):
-        """Send a JSON response."""
-        try:
-            json_data = json.dumps(data).encode('utf-8')
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json; charset=utf-8')
-            self.send_header('Content-length', len(json_data))
-            self.send_header('Cache-Control', 'no-cache')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-            self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-            self.end_headers()
-            self.wfile.write(json_data)
-            print(f"✅ Sent JSON response to {self.client_address[0]}")
-        except Exception as e:
-            print(f"❌ Error sending JSON response: {e}")
-            self.send_error(500)
-    
-    def get_html_template(self):
-        """Return the HTML template."""
-        return '''<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🧮 MER Contribution Margin Calculator</title>
+    <title>🧮 MER Calculator - Standalone Version</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
@@ -396,6 +137,15 @@ class MERRequestHandler(BaseHTTPRequestHandler):
             border: 2px solid var(--border-color);
         }
 
+        .alert-info {
+            background: #e0f2fe;
+            border: 1px solid #0288d1;
+            color: #0277bd;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 2rem;
+        }
+
         @media (max-width: 768px) {
             .main-container { margin: 1rem; }
             .header h1 { font-size: 2rem; }
@@ -408,9 +158,15 @@ class MERRequestHandler(BaseHTTPRequestHandler):
             <div class="header">
                 <h1><i class="fas fa-calculator"></i> MER Calculator</h1>
                 <p>Professional Marketing Efficiency Ratio & Contribution Margin Calculator</p>
+                <small>Standalone Version - No Server Required</small>
             </div>
 
             <div class="content-area">
+                <div class="alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Standalone Mode:</strong> This version works entirely in your browser without requiring a server connection.
+                </div>
+
                 <div class="input-section">
                     <h2><i class="fas fa-cog"></i> Configuration & Target Values</h2>
                     
@@ -537,63 +293,114 @@ class MERRequestHandler(BaseHTTPRequestHandler):
     <script>
         let chart = null;
 
-        document.addEventListener('DOMContentLoaded', function() {
-            loadDefaults();
-        });
-
-        async function loadDefaults() {
-            try {
-                const response = await fetch('/api/defaults');
-                const data = await response.json();
-                
-                if (data.config && data.user_inputs) {
-                    document.getElementById('target_revenue').value = data.user_inputs.target_revenue;
-                    document.getElementById('target_mer').value = data.user_inputs.target_mer;
-                    document.getElementById('variable_cost').value = data.config.variable_cost;
-                    document.getElementById('contribution_margin_goal').value = data.config.contribution_margin_goal;
-                }
-            } catch (error) {
-                console.error('Error loading defaults:', error);
-            }
+        // MER Calculator logic (standalone)
+        function calculateContributionMargin(revenue, mer, variableCost) {
+            const grossProfit = revenue * (1 - variableCost);
+            const marketingSpend = revenue / mer;
+            return grossProfit - marketingSpend;
         }
 
-        async function resetForm() {
-            try {
-                await fetch('/api/reset', { method: 'POST' });
-                loadDefaults();
-                hideResults();
-            } catch (error) {
-                console.error('Error resetting:', error);
+        function generateRevenueRangeData(targetMer, targetRevenue, variableCost, revenueIncrement = 20000) {
+            const pointsBefore = 10;
+            const pointsAfter = 10;
+            const startRevenue = targetRevenue - (pointsBefore * revenueIncrement);
+            const endRevenue = targetRevenue + (pointsAfter * revenueIncrement);
+            
+            const revenueValues = [];
+            const cmValues = [];
+            
+            for (let currentRevenue = startRevenue; currentRevenue <= endRevenue; currentRevenue += revenueIncrement) {
+                revenueValues.push(currentRevenue);
+                cmValues.push(calculateContributionMargin(currentRevenue, targetMer, variableCost));
             }
+            
+            return { revenueValues, cmValues };
         }
 
-        document.getElementById('calculatorForm').addEventListener('submit', async function(e) {
+        function resetForm() {
+            document.getElementById('target_revenue').value = 820000;
+            document.getElementById('target_mer').value = 7.50;
+            document.getElementById('variable_cost').value = 0.65;
+            document.getElementById('contribution_margin_goal').value = 176000;
+            hideResults();
+        }
+
+        document.getElementById('calculatorForm').addEventListener('submit', function(e) {
             e.preventDefault();
             
-            const formData = {
-                target_revenue: parseFloat(document.getElementById('target_revenue').value),
-                target_mer: parseFloat(document.getElementById('target_mer').value),
-                variable_cost: parseFloat(document.getElementById('variable_cost').value),
-                contribution_margin_goal: parseFloat(document.getElementById('contribution_margin_goal').value),
-                revenue_increment: 20000
-            };
-            
             try {
-                const response = await fetch('/api/calculate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(formData)
-                });
+                const formData = {
+                    target_revenue: parseFloat(document.getElementById('target_revenue').value),
+                    target_mer: parseFloat(document.getElementById('target_mer').value),
+                    variable_cost: parseFloat(document.getElementById('variable_cost').value),
+                    contribution_margin_goal: parseFloat(document.getElementById('contribution_margin_goal').value)
+                };
                 
-                const result = await response.json();
-                
-                if (result.success) {
-                    displayResults(result, formData);
-                } else {
-                    showErrors(result.errors);
+                // Validation
+                const errors = [];
+                if (!formData.target_revenue || formData.target_revenue <= 0) {
+                    errors.push('Target Revenue must be greater than 0');
                 }
+                if (!formData.target_mer || formData.target_mer <= 0) {
+                    errors.push('Target MER must be greater than 0');
+                }
+                if (!formData.variable_cost || formData.variable_cost < 0 || formData.variable_cost >= 1) {
+                    errors.push('Variable Cost must be between 0 and 1');
+                }
+                if (!formData.contribution_margin_goal || formData.contribution_margin_goal <= 0) {
+                    errors.push('Contribution Margin Goal must be greater than 0');
+                }
+                
+                if (errors.length > 0) {
+                    showErrors(errors);
+                    return;
+                }
+                
+                clearErrors();
+                
+                // Calculate results
+                const contributionMargin = calculateContributionMargin(
+                    formData.target_revenue, 
+                    formData.target_mer, 
+                    formData.variable_cost
+                );
+                
+                const meetsGoal = contributionMargin >= formData.contribution_margin_goal;
+                const difference = contributionMargin - formData.contribution_margin_goal;
+                
+                const coefficient = (1 - formData.variable_cost) - (1 / formData.target_mer);
+                const minRevenue = coefficient > 0 ? formData.contribution_margin_goal / coefficient : 0;
+                const revenueDifference = formData.target_revenue - minRevenue;
+                
+                const grossProfit = formData.target_revenue * (1 - formData.variable_cost);
+                const marketingSpend = formData.target_revenue / formData.target_mer;
+                
+                // Generate chart data
+                const chartData = generateRevenueRangeData(
+                    formData.target_mer, 
+                    formData.target_revenue, 
+                    formData.variable_cost
+                );
+                
+                const result = {
+                    contribution_margin: contributionMargin,
+                    meets_goal: meetsGoal,
+                    difference: difference,
+                    min_revenue: minRevenue,
+                    revenue_difference: revenueDifference,
+                    gross_profit: grossProfit,
+                    marketing_spend: marketingSpend,
+                    chart_data: {
+                        revenue_values: chartData.revenueValues,
+                        cm_values: chartData.cmValues,
+                        cm_goal: formData.contribution_margin_goal
+                    }
+                };
+                
+                displayResults(result, formData);
+                
             } catch (error) {
-                showError('Error calculating results. Please try again.');
+                showError('Error calculating results: ' + error.message);
             }
         });
 
@@ -710,6 +517,10 @@ class MERRequestHandler(BaseHTTPRequestHandler):
             `;
         }
 
+        function clearErrors() {
+            document.getElementById('errorMessages').innerHTML = '';
+        }
+
         function showError(message) {
             const errorDiv = document.getElementById('errorMessages');
             errorDiv.innerHTML = `
@@ -720,28 +531,4 @@ class MERRequestHandler(BaseHTTPRequestHandler):
         }
     </script>
 </body>
-</html>'''
-
-def main():
-    """Run the MER Calculator web server."""
-    port = 8000
-    
-    try:
-        server = HTTPServer(('0.0.0.0', port), MERRequestHandler)
-        print(f"🧮 MER Calculator Server Starting...")
-        print(f"🌐 Server running at: http://localhost:{port}")
-        print(f"📱 Access from any device on your network")
-        print(f"🔗 Open your browser and navigate to the URL above")
-        print(f"⭐ Features: Professional UI, Interactive Charts, Real-time Calculations")
-        print(f"🛑 Press Ctrl+C to stop the server")
-        print("="*60)
-        
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\n\n👋 Server stopped. Thank you for using MER Calculator!")
-    except Exception as e:
-        print(f"❌ Error starting server: {e}")
-        print("💡 Try changing the port if 8000 is already in use")
-
-if __name__ == "__main__":
-    main()
+</html>
