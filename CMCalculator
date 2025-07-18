@@ -1,0 +1,656 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import json
+import os
+from datetime import datetime
+from typing import Dict, List, Tuple, Optional
+
+class MERCalculator:
+    """
+    🧮 MER (Marketing Efficiency Ratio) Contribution Margin Calculator
+    
+    This calculator helps determine contribution margins for different 
+    combinations of revenue and MER values with a menu-based interface.
+    """
+    
+    def __init__(self):
+        """Initialize the calculator with default configuration."""
+        self.config_file = 'mer_calculator_config.json'
+        self.results_file = 'mer_calculator_results.csv'
+        
+        # Default configuration
+        self.default_config = {
+            'variable_cost': 0.65,              # 65% variable cost
+            'revenue_start_number': 100000,     # €100,000 starting revenue
+            'mer_increment': 0.50,              # 50% MER increment
+            'revenue_increment': 20000,         # €20,000 revenue increment
+            'contribution_margin_goal': 176000  # €176,000 contribution margin goal
+        }
+        
+        # Default user inputs
+        self.default_inputs = {
+            'target_revenue': 820000,           # €820,000 - Target revenue
+            'target_mer': 7.50                  # 750% MER (7.50 as decimal)
+        }
+        
+        # Load existing config if available
+        self.config = self.load_config()
+        self.user_inputs = self.load_user_inputs()
+    
+    def show_menu(self):
+        """Display the main menu interface."""
+        print("\n" + "="*60)
+        print("🧮 MER CONTRIBUTION MARGIN CALCULATOR")
+        print("="*60)
+        print("📋 MENU OPTIONS:")
+        print("1. 📊 Run MER Calculator")
+        print("2. ⚙️  Setup Configuration")
+        print("3. 🎯 Enter Target Values")
+        print("4. 💾 Save Configuration")
+        print("5. 📂 Load Configuration")
+        print("6. 🔄 Reset to Defaults")
+        print("7. 📈 View Last Results")
+        print("8. 💾 Export Results to CSV")
+        print("9. ❓ Help")
+        print("0. 🚪 Exit")
+        print("="*60)
+        
+        while True:
+            try:
+                choice = input("\n🔢 Enter your choice (0-9): ").strip()
+                if choice in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']:
+                    return choice
+                else:
+                    print("❌ Invalid choice. Please enter a number between 0-9.")
+            except KeyboardInterrupt:
+                print("\n\n👋 Goodbye!")
+                return '0'
+    
+    def run_calculator(self):
+        """Run the main calculator with current configuration."""
+        print("\n" + "="*60)
+        print("📊 RUNNING MER CALCULATOR")
+        print("="*60)
+        
+        # Validate inputs
+        validation_errors = self.validate_inputs()
+        if validation_errors:
+            print("❌ VALIDATION ERRORS:")
+            for error in validation_errors:
+                print(f"   • {error}")
+            input("\n📝 Press Enter to continue...")
+            return None
+        
+        # Calculate contribution margin
+        contribution_margin = self.calculate_contribution_margin(
+            self.user_inputs['target_revenue'], 
+            self.user_inputs['target_mer']
+        )
+        
+        # Check if goal is met
+        meets_goal = contribution_margin >= self.config['contribution_margin_goal']
+        
+        # Generate chart data
+        revenue_values, cm_values = self.generate_revenue_range_data(
+            self.user_inputs['target_mer'], 
+            self.user_inputs['target_revenue']
+        )
+        
+        # Display results
+        self.display_results(contribution_margin, meets_goal)
+        
+        # Additional analysis
+        self.show_additional_analysis(contribution_margin)
+        
+        # Create chart
+        self.create_chart(revenue_values, cm_values, self.user_inputs['target_mer'], 
+                         self.user_inputs['target_revenue'], contribution_margin)
+        
+        # Save results
+        self.save_results(contribution_margin, meets_goal, revenue_values, cm_values)
+        
+        input("\n📝 Press Enter to continue...")
+        return contribution_margin
+    
+    def setup_configuration(self):
+        """Interactive setup for configuration values."""
+        print("\n" + "="*60)
+        print("⚙️  CONFIGURATION SETUP")
+        print("="*60)
+        print("💡 Enter new values or press Enter to keep current values")
+        print()
+        
+        # Variable Cost
+        current = self.config['variable_cost']
+        new_value = input(f"Variable Cost (current: {current:.2f} = {current*100:.0f}%): ").strip()
+        if new_value:
+            try:
+                self.config['variable_cost'] = float(new_value)
+            except ValueError:
+                print("❌ Invalid input. Keeping current value.")
+        
+        # Revenue Start Number
+        current = self.config['revenue_start_number']
+        new_value = input(f"Revenue Start Number (current: €{current:,.0f}): ").strip()
+        if new_value:
+            try:
+                self.config['revenue_start_number'] = float(new_value)
+            except ValueError:
+                print("❌ Invalid input. Keeping current value.")
+        
+        # MER Increment
+        current = self.config['mer_increment']
+        new_value = input(f"MER Increment (current: {current:.2f} = {current*100:.0f}%): ").strip()
+        if new_value:
+            try:
+                self.config['mer_increment'] = float(new_value)
+            except ValueError:
+                print("❌ Invalid input. Keeping current value.")
+        
+        # Revenue Increment
+        current = self.config['revenue_increment']
+        new_value = input(f"Revenue Increment (current: €{current:,.0f}): ").strip()
+        if new_value:
+            try:
+                self.config['revenue_increment'] = float(new_value)
+            except ValueError:
+                print("❌ Invalid input. Keeping current value.")
+        
+        # Contribution Margin Goal
+        current = self.config['contribution_margin_goal']
+        new_value = input(f"Contribution Margin Goal (current: €{current:,.0f}): ").strip()
+        if new_value:
+            try:
+                self.config['contribution_margin_goal'] = float(new_value)
+            except ValueError:
+                print("❌ Invalid input. Keeping current value.")
+        
+        print("\n✅ Configuration updated successfully!")
+        input("📝 Press Enter to continue...")
+    
+    def setup_target_values(self):
+        """Interactive setup for target values."""
+        print("\n" + "="*60)
+        print("🎯 TARGET VALUES SETUP")
+        print("="*60)
+        print("💡 Enter new values or press Enter to keep current values")
+        print()
+        
+        # Target Revenue
+        current = self.user_inputs['target_revenue']
+        new_value = input(f"Target Revenue (current: €{current:,.0f}): ").strip()
+        if new_value:
+            try:
+                self.user_inputs['target_revenue'] = float(new_value)
+            except ValueError:
+                print("❌ Invalid input. Keeping current value.")
+        
+        # Target MER
+        current = self.user_inputs['target_mer']
+        new_value = input(f"Target MER (current: {current:.2f} = {current*100:.0f}%): ").strip()
+        if new_value:
+            try:
+                self.user_inputs['target_mer'] = float(new_value)
+            except ValueError:
+                print("❌ Invalid input. Keeping current value.")
+        
+        print("\n✅ Target values updated successfully!")
+        input("📝 Press Enter to continue...")
+    
+    def calculate_contribution_margin(self, revenue: float, mer: float) -> float:
+        """Calculate contribution margin for given revenue and MER."""
+        gross_profit = revenue * (1 - self.config['variable_cost'])
+        marketing_spend = revenue / mer
+        return gross_profit - marketing_spend
+    
+    def generate_revenue_range_data(self, target_mer: float, target_revenue: float, 
+                                   points_before: int = 10, points_after: int = 10) -> Tuple[List[float], List[float]]:
+        """Generate data points for revenue range analysis."""
+        start_revenue = target_revenue - (points_before * self.config['revenue_increment'])
+        end_revenue = target_revenue + (points_after * self.config['revenue_increment'])
+        
+        revenue_values = []
+        cm_values = []
+        
+        current_revenue = start_revenue
+        while current_revenue <= end_revenue:
+            revenue_values.append(current_revenue)
+            cm_values.append(self.calculate_contribution_margin(current_revenue, target_mer))
+            current_revenue += self.config['revenue_increment']
+        
+        return revenue_values, cm_values
+    
+    def display_results(self, contribution_margin: float, meets_goal: bool):
+        """Display the main results."""
+        print("\n" + "="*60)
+        print("📊 RESULTS")
+        print("="*60)
+        print(f"🎯 Target Revenue:        €{self.user_inputs['target_revenue']:,.0f}")
+        print(f"📈 Target MER:            {self.user_inputs['target_mer']*100:.0f}%")
+        print(f"💰 Contribution Margin:   €{contribution_margin:,.0f}")
+        print(f"🎯 Goal Amount:           €{self.config['contribution_margin_goal']:,.0f}")
+        print(f"✅ Meets Goal:            {'YES ✅' if meets_goal else 'NO ❌'}")
+        
+        difference = contribution_margin - self.config['contribution_margin_goal']
+        print(f"📊 Difference from Goal:  €{difference:,.0f} {'(Surplus)' if difference >= 0 else '(Deficit)'}")
+    
+    def show_additional_analysis(self, contribution_margin: float):
+        """Show additional analysis."""
+        print("\n" + "="*60)
+        print("🔍 ADDITIONAL ANALYSIS")
+        print("="*60)
+        
+        # Calculate minimum revenue needed to meet goal
+        coefficient = (1 - self.config['variable_cost']) - (1 / self.user_inputs['target_mer'])
+        min_revenue = self.config['contribution_margin_goal'] / coefficient
+        
+        print(f"💡 Minimum Revenue for Goal:  €{min_revenue:,.0f}")
+        
+        revenue_difference = self.user_inputs['target_revenue'] - min_revenue
+        print(f"📊 Revenue vs Minimum:        €{revenue_difference:,.0f} {'(Surplus)' if revenue_difference >= 0 else '(Deficit)'}")
+        
+        # Show formula
+        print(f"\n📐 Formula Used:")
+        print(f"   Contribution Margin = Revenue × {(1-self.config['variable_cost'])*100:.0f}% - (Revenue ÷ {self.user_inputs['target_mer']:.1f})")
+        print(f"   Contribution Margin = €{self.user_inputs['target_revenue']:,.0f} × {(1-self.config['variable_cost'])*100:.0f}% - (€{self.user_inputs['target_revenue']:,.0f} ÷ {self.user_inputs['target_mer']:.1f})")
+        
+        gross_profit = self.user_inputs['target_revenue'] * (1 - self.config['variable_cost'])
+        marketing_spend = self.user_inputs['target_revenue'] / self.user_inputs['target_mer']
+        print(f"   Contribution Margin = €{gross_profit:,.0f} - €{marketing_spend:,.0f} = €{contribution_margin:,.0f}")
+    
+    def create_chart(self, revenue_values: List[float], cm_values: List[float], 
+                    target_mer: float, target_revenue: float, target_cm: float):
+        """Create a chart showing contribution margin vs revenue."""
+        plt.figure(figsize=(12, 8))
+        
+        # Main line plot - Shows how CM changes with revenue
+        plt.plot(revenue_values, cm_values, 'b-', linewidth=3, label='Contribution Margin', marker='o', markersize=4)
+        
+        # Goal line - Horizontal line showing the CM goal
+        plt.axhline(y=self.config['contribution_margin_goal'], color='orange', linestyle='--', 
+                   linewidth=3, label=f'CM Goal: €{self.config["contribution_margin_goal"]:,.0f}')
+        
+        # Highlight target point
+        plt.scatter([target_revenue], [target_cm], color='red', s=150, zorder=5, 
+                   label=f'Your Target: €{target_revenue:,.0f} → €{target_cm:,.0f}', marker='*')
+        
+        # Add text annotation for the target point
+        plt.annotate(f'€{target_cm:,.0f}', 
+                    xy=(target_revenue, target_cm), 
+                    xytext=(10, 10), 
+                    textcoords='offset points',
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='red', alpha=0.7),
+                    color='white', fontweight='bold')
+        
+        # Formatting
+        plt.xlabel('Revenue (€)', fontsize=12, fontweight='bold')
+        plt.ylabel('Contribution Margin (€)', fontsize=12, fontweight='bold')
+        plt.title(f'Contribution Margin vs Revenue\n(MER: {target_mer*100:.0f}%)', fontsize=14, fontweight='bold')
+        plt.grid(True, alpha=0.3)
+        
+        # Enhanced legend
+        plt.legend(loc='upper left', fontsize=11, frameon=True, fancybox=True, shadow=True)
+        
+        # Format axes
+        plt.gca().yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'€{x:,.0f}'))
+        plt.gca().xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'€{x:,.0f}'))
+        
+        # Rotate x-axis labels for better readability
+        plt.xticks(rotation=45)
+        
+        # Add explanation text
+        plt.figtext(0.02, 0.02, 
+                   f"Formula: Revenue × {(1-self.config['variable_cost'])*100:.0f}% - (Revenue ÷ {target_mer:.1f})",
+                   fontsize=10, style='italic', alpha=0.7)
+        
+        plt.tight_layout()
+        plt.show()
+        
+        # Print chart explanation
+        print("\n" + "="*60)
+        print("📈 CHART EXPLANATION")
+        print("="*60)
+        print("🔵 BLUE LINE (Contribution Margin):")
+        print("   • Shows how your contribution margin changes as revenue increases")
+        print("   • Uses your specified MER rate throughout")
+        print("   • Upward slope = higher revenue = higher contribution margin")
+        print("")
+        print("🟠 ORANGE DASHED LINE (CM Goal):")
+        print(f"   • Horizontal line at €{self.config['contribution_margin_goal']:,.0f}")
+        print("   • Your target contribution margin goal")
+        print("   • Points above this line = you exceed your goal")
+        print("")
+        print("🔴 RED STAR (Your Target):")
+        print(f"   • Your specific revenue/CM combination")
+        print(f"   • Revenue: €{target_revenue:,.0f}")
+        print(f"   • Contribution Margin: €{target_cm:,.0f}")
+        print("="*60)
+    
+    def save_config(self):
+        """Save current configuration to file."""
+        config_data = {
+            'config': self.config,
+            'user_inputs': self.user_inputs,
+            'saved_date': datetime.now().isoformat()
+        }
+        
+        try:
+            with open(self.config_file, 'w') as f:
+                json.dump(config_data, f, indent=2)
+            print(f"✅ Configuration saved to {self.config_file}")
+        except Exception as e:
+            print(f"❌ Error saving configuration: {e}")
+        
+        input("📝 Press Enter to continue...")
+    
+    def load_config(self) -> Dict:
+        """Load configuration from file."""
+        if os.path.exists(self.config_file):
+            try:
+                with open(self.config_file, 'r') as f:
+                    config_data = json.load(f)
+                return config_data.get('config', self.default_config)
+            except Exception as e:
+                print(f"❌ Error loading configuration: {e}")
+                return self.default_config
+        return self.default_config
+    
+    def load_user_inputs(self) -> Dict:
+        """Load user inputs from file."""
+        if os.path.exists(self.config_file):
+            try:
+                with open(self.config_file, 'r') as f:
+                    config_data = json.load(f)
+                return config_data.get('user_inputs', self.default_inputs)
+            except Exception as e:
+                print(f"❌ Error loading user inputs: {e}")
+                return self.default_inputs
+        return self.default_inputs
+    
+    def load_config_interactive(self):
+        """Interactive configuration loading."""
+        if os.path.exists(self.config_file):
+            try:
+                with open(self.config_file, 'r') as f:
+                    config_data = json.load(f)
+                
+                self.config = config_data.get('config', self.default_config)
+                self.user_inputs = config_data.get('user_inputs', self.default_inputs)
+                
+                saved_date = config_data.get('saved_date', 'Unknown')
+                print(f"✅ Configuration loaded from {self.config_file}")
+                print(f"📅 Saved date: {saved_date}")
+            except Exception as e:
+                print(f"❌ Error loading configuration: {e}")
+        else:
+            print(f"❌ Configuration file {self.config_file} not found")
+        
+        input("📝 Press Enter to continue...")
+    
+    def reset_to_defaults(self):
+        """Reset configuration to default values."""
+        print("\n" + "="*60)
+        print("🔄 RESET TO DEFAULTS")
+        print("="*60)
+        
+        confirm = input("⚠️  This will reset all configuration to default values. Continue? (y/N): ").strip().lower()
+        if confirm == 'y':
+            self.config = self.default_config.copy()
+            self.user_inputs = self.default_inputs.copy()
+            print("✅ Configuration reset to defaults")
+        else:
+            print("❌ Reset cancelled")
+        
+        input("📝 Press Enter to continue...")
+    
+    def save_results(self, contribution_margin: float, meets_goal: bool, 
+                    revenue_values: List[float], cm_values: List[float]):
+        """Save results to CSV file."""
+        # Create results dataframe
+        results_df = pd.DataFrame({
+            'Revenue': revenue_values,
+            'Contribution_Margin': cm_values,
+            'CM_Goal': [self.config['contribution_margin_goal']] * len(revenue_values)
+        })
+        
+        # Add metadata
+        metadata = {
+            'Timestamp': datetime.now().isoformat(),
+            'Target_Revenue': self.user_inputs['target_revenue'],
+            'Target_MER': self.user_inputs['target_mer'],
+            'Calculated_CM': contribution_margin,
+            'Meets_Goal': meets_goal,
+            'Variable_Cost': self.config['variable_cost'],
+            'CM_Goal': self.config['contribution_margin_goal']
+        }
+        
+        # Save to CSV
+        try:
+            results_df.to_csv(self.results_file, index=False)
+            
+            # Save metadata to separate file
+            metadata_file = self.results_file.replace('.csv', '_metadata.json')
+            with open(metadata_file, 'w') as f:
+                json.dump(metadata, f, indent=2)
+            
+            print(f"💾 Results saved to {self.results_file}")
+            print(f"💾 Metadata saved to {metadata_file}")
+        except Exception as e:
+            print(f"❌ Error saving results: {e}")
+    
+    def view_last_results(self):
+        """View the last saved results."""
+        print("\n" + "="*60)
+        print("📈 LAST RESULTS")
+        print("="*60)
+        
+        metadata_file = self.results_file.replace('.csv', '_metadata.json')
+        
+        if os.path.exists(metadata_file):
+            try:
+                with open(metadata_file, 'r') as f:
+                    metadata = json.load(f)
+                
+                print(f"📅 Timestamp: {metadata['Timestamp']}")
+                print(f"🎯 Target Revenue: €{metadata['Target_Revenue']:,.0f}")
+                print(f"📈 Target MER: {metadata['Target_MER']*100:.0f}%")
+                print(f"💰 Calculated CM: €{metadata['Calculated_CM']:,.0f}")
+                print(f"🎯 CM Goal: €{metadata['CM_Goal']:,.0f}")
+                print(f"✅ Meets Goal: {'YES ✅' if metadata['Meets_Goal'] else 'NO ❌'}")
+                print(f"📊 Variable Cost: {metadata['Variable_Cost']*100:.0f}%")
+                
+            except Exception as e:
+                print(f"❌ Error loading results: {e}")
+        else:
+            print("❌ No previous results found")
+        
+        input("📝 Press Enter to continue...")
+    
+    def export_results(self):
+        """Export results to CSV."""
+        if os.path.exists(self.results_file):
+            print(f"✅ Results are already saved in {self.results_file}")
+            print("📊 The file contains:")
+            print("   • Revenue values")
+            print("   • Contribution margin values")
+            print("   • CM goal values")
+            print(f"📝 Metadata is saved in {self.results_file.replace('.csv', '_metadata.json')}")
+        else:
+            print("❌ No results to export. Run the calculator first.")
+        
+        input("📝 Press Enter to continue...")
+    
+    def validate_inputs(self) -> List[str]:
+        """Validate all inputs and return list of errors."""
+        errors = []
+        
+        # Validate config
+        if not self.config['variable_cost'] or self.config['variable_cost'] < 0 or self.config['variable_cost'] >= 1:
+            errors.append('Variable Cost must be between 0 and 1 (e.g., 0.65 for 65%)')
+        
+        if not self.config['revenue_start_number'] or self.config['revenue_start_number'] <= 0:
+            errors.append('Revenue Start Number must be greater than 0')
+        
+        if not self.config['mer_increment'] or self.config['mer_increment'] <= 0:
+            errors.append('MER Increment must be greater than 0')
+        
+        if not self.config['revenue_increment'] or self.config['revenue_increment'] <= 0:
+            errors.append('Revenue Increment must be greater than 0')
+        
+        if not self.config['contribution_margin_goal'] or self.config['contribution_margin_goal'] <= 0:
+            errors.append('Contribution Margin Goal must be greater than 0')
+        
+        # Validate user inputs
+        if not self.user_inputs['target_revenue'] or self.user_inputs['target_revenue'] <= 0:
+            errors.append('Target Revenue must be greater than 0')
+        
+        if not self.user_inputs['target_mer'] or self.user_inputs['target_mer'] <= 0:
+            errors.append('Target MER must be greater than 0')
+        
+        return errors
+    
+    def show_help(self):
+        """Display help information."""
+        help_text = """
+🧮 MER CONTRIBUTION MARGIN CALCULATOR HELP
+
+📋 MENU OPTIONS:
+1. 📊 Run MER Calculator - Calculate contribution margin with current settings
+2. ⚙️  Setup Configuration - Configure variable cost, increments, and goal
+3. 🎯 Enter Target Values - Set your target revenue and MER
+4. 💾 Save Configuration - Save current settings to file
+5. 📂 Load Configuration - Load previously saved settings
+6. 🔄 Reset to Defaults - Reset all settings to default values
+7. 📈 View Last Results - View previously calculated results
+8. 💾 Export Results to CSV - Export calculation results to CSV file
+9. ❓ Help - Show this help message
+0. 🚪 Exit - Exit the calculator
+
+💡 INPUT FORMATS:
+• Variable Cost: Enter as decimal (0.65 = 65%)
+• Target MER: Enter as decimal (7.50 = 750%)
+• Revenue values: Enter as numbers (820000 = €820,000)
+
+📊 WHAT THE CALCULATOR DOES:
+• Calculates contribution margin using the formula:
+  Contribution Margin = Revenue × (1 - Variable Cost) - (Revenue ÷ MER)
+• Shows whether you meet your contribution margin goal
+• Generates interactive charts showing CM vs Revenue relationship
+• Provides additional analysis including minimum revenue needed
+• Saves results for future reference
+
+🔍 CHART EXPLANATION:
+• Blue line: Your contribution margin at different revenue levels
+• Orange dashed line: Your contribution margin goal
+• Red star: Your current target revenue/CM combination
+• Where lines intersect: Revenue needed to exactly meet your goal
+
+📁 FILE MANAGEMENT:
+• Configuration is saved to 'mer_calculator_config.json'
+• Results are saved to 'mer_calculator_results.csv'
+• Metadata is saved to 'mer_calculator_results_metadata.json'
+
+🚀 GETTING STARTED:
+1. Run the calculator once with default values to see how it works
+2. Use 'Setup Configuration' to enter your business parameters
+3. Use 'Enter Target Values' to set your target revenue and MER
+4. Run the calculator again to see your results
+5. Save your configuration for future use
+        """
+        
+        print(help_text)
+        input("📝 Press Enter to continue...")
+    
+    def run(self):
+        """Main application loop."""
+        print("🧮 Welcome to MER Contribution Margin Calculator!")
+        print("💡 This calculator helps you analyze contribution margins for different revenue and MER combinations.")
+        
+        while True:
+            choice = self.show_menu()
+            
+            if choice == '0':
+                print("\n👋 Thank you for using MER Calculator! Goodbye!")
+                break
+            elif choice == '1':
+                self.run_calculator()
+            elif choice == '2':
+                self.setup_configuration()
+            elif choice == '3':
+                self.setup_target_values()
+            elif choice == '4':
+                self.save_config()
+            elif choice == '5':
+                self.load_config_interactive()
+            elif choice == '6':
+                self.reset_to_defaults()
+            elif choice == '7':
+                self.view_last_results()
+            elif choice == '8':
+                self.export_results()
+            elif choice == '9':
+                self.show_help()
+
+
+def main():
+    """Main function to run the MER calculator."""
+    calculator = MERCalculator()
+    calculator.run()
+
+
+if __name__ == "__main__":
+    main()
+
+
+# =============================================================================
+# USAGE INSTRUCTIONS
+# =============================================================================
+
+"""
+🚀 TO USE THIS PYTHON SCRIPT:
+
+1. INSTALLATION:
+   - Install required packages: pip install matplotlib pandas numpy
+   - Save this script as 'mer_calculator.py'
+   - Run: python mer_calculator.py
+
+2. MENU-BASED INTERFACE:
+   - The script provides a menu-driven interface
+   - No need to modify code - all inputs are interactive
+   - Configuration is saved automatically
+
+3. FEATURES:
+   - Interactive menu system (like Google Sheets menu)
+   - Configuration management with save/load
+   - Professional charts with matplotlib
+   - CSV export functionality
+   - Input validation with error messages
+   - Comprehensive help system
+
+4. WORKFLOW:
+   - First run: Use default values to see how it works
+   - Setup: Configure your business parameters
+   - Target: Enter your target revenue and MER
+   - Calculate: Run the calculator to see results
+   - Save: Save configuration for future use
+
+5. FILE MANAGEMENT:
+   - Config saved to: 'mer_calculator_config.json'
+   - Results saved to: 'mer_calculator_results.csv'
+   - Metadata saved to: 'mer_calculator_results_metadata.json'
+
+6. MENU OPTIONS:
+   📊 Run Calculator - Main calculation function
+   ⚙️  Setup Config - Configure business parameters
+   🎯 Target Values - Set revenue and MER targets
+   💾 Save/Load - Manage configurations
+   🔄 Reset - Return to defaults
+   📈 View Results - See previous calculations
+   💾 Export - Save to CSV
+   ❓ Help - Comprehensive help
+
+This Python version provides the same functionality as the Google Sheets 
+version but with enhanced features like file management, CSV export, and 
+a more comprehensive menu system.
+"""
